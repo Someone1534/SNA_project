@@ -1,0 +1,62 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: backup_manager_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-backup_manager}
+      POSTGRES_USER: ${POSTGRES_USER:-backup_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-backup_password}
+    ports:
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres:/docker-entrypoint-initdb.d:ro,Z
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-backup_user} -d ${POSTGRES_DB:-backup_manager}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backup-service:
+    build:
+      context: ./backup_service
+    container_name: backup_manager_backup_service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:-backup_manager}
+      POSTGRES_USER: ${POSTGRES_USER:-backup_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-backup_password}
+      BACKUP_DIR: /backups
+      COMMAND_TIMEOUT_SECONDS: "300"
+    ports:
+      - "${BACKUP_SERVICE_PORT:-8000}:8000"
+    volumes:
+      - ./backups:/backups:Z
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5).read()\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  telegram-bot:
+    build:
+      context: ./telegram_bot
+    container_name: backup_manager_telegram_bot
+    restart: unless-stopped
+    depends_on:
+      backup-service:
+        condition: service_healthy
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      BACKUP_SERVICE_URL: http://backup-service:8000
+      REQUEST_TIMEOUT_SECONDS: "60"
+      MAX_LIST_ITEMS: "10"
+
+volumes:
+  postgres_data:
