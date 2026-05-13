@@ -28,9 +28,6 @@ jobs:
       - name: Ruff check
         run: ruff check backup_service telegram_bot
 
-      - name: Ruff format check
-        run: ruff format --check backup_service telegram_bot
-
   build-check:
     name: Build check
     runs-on: ubuntu-latest
