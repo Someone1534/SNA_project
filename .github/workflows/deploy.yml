@@ -1,0 +1,57 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build & run
+    runs-on: self-hosted
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write .env from secrets
+        shell: bash
+        run: |
+          umask 077
+          cat > .env <<EOF
+          POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+          POSTGRES_USER=${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_HOST_PORT=${{ secrets.POSTGRES_HOST_PORT }}
+          BACKUP_SERVICE_PORT=${{ secrets.BACKUP_SERVICE_PORT }}
+          TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
+          EOF
+
+      - name: Build images
+        shell: bash
+        run: docker compose build --pull
+
+      - name: Bring stack up
+        shell: bash
+        run: docker compose up -d --remove-orphans
+
+      - name: Wait for backup-service health
+        shell: bash
+        run: |
+          for i in {1..20}; do
+            status=$(docker inspect --format='{{.State.Health.Status}}' backup_manager_backup_service 2>/dev/null || echo "starting")
+            echo "Attempt $i: $status"
+            [ "$status" = "healthy" ] && exit 0
+            sleep 3
+          done
+          echo "::error::backup-service did not become healthy"
+          docker compose logs --tail=200
+          exit 1
+
+      - name: Prune dangling images
+        if: success()
+        shell: bash
+        run: docker image prune -f
