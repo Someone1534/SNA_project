@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install ruff
+        run: pip install ruff==0.6.9
+
+      - name: Ruff check
+        run: ruff check backup_service telegram_bot
+
+      - name: Ruff format check
+        run: ruff format --check backup_service telegram_bot
+
+  build-check:
+    name: Build check
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backup_service
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backup_service
+          push: false
+          cache-from: type=gha,scope=backup
+          cache-to: type=gha,scope=backup,mode=max
+
+      - name: Build telegram_bot
+        uses: docker/build-push-action@v6
+        with:
+          context: ./telegram_bot
+          push: false
+          cache-from: type=gha,scope=bot
+          cache-to: type=gha,scope=bot,mode=max
+
+  compose-check:
+    name: Compose smoke test
+    runs-on: ubuntu-latest
+    needs: build-check
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate compose file
+        run: docker compose -f docker-compose.yml config --quiet
+
+      - name: Start stack 
+        env:
+          TELEGRAM_BOT_TOKEN: "a"
+          POSTGRES_DB: backup_manager
+          POSTGRES_USER: backup_user
+          POSTGRES_PASSWORD: backup_password
+        run: |
+          docker compose up -d --build postgres backup-service
+          for i in {1..20}; do
+            status=$(docker inspect --format='{{.State.Health.Status}}' backup_manager_backup_service 2>/dev/null || echo "starting")
+            echo "Attempt $i: $status"
+            [ "$status" = "healthy" ] && exit 0
+            sleep 3
+          done
+          echo "::error::backup-service did not become healthy"
+          docker compose logs
+          exit 1
+
+      - name: Teardown
+        if: always()
+        run: docker compose down -v
