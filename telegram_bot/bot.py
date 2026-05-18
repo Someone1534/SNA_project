@@ -103,7 +103,7 @@ def format_backup(backup: dict[str, Any]) -> str:
     return f"{filename} | {size} | {created_at}"
 
 
-async def (update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     del context
     await update.effective_message.reply_text(
         "Backup Manager Bot\n\n"
