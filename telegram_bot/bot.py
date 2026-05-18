@@ -103,11 +103,10 @@ def format_backup(backup: dict[str, Any]) -> str:
     return f"{filename} | {size} | {created_at}"
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def (update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     del context
     await update.effective_message.reply_text(
         "Backup Manager Bot\n\n"
-        "COMMIT MADE IN BRANCH"
         "/status - check backup service and database\n"
         "/backup - create a new database dump\n"
         "/list - show available dumps\n"
