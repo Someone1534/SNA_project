@@ -106,7 +106,7 @@ def format_backup(backup: dict[str, Any]) -> str:
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     del context
     await update.effective_message.reply_text(
-        "Backup Manager Bot\n\n"
+        "Backup Manager Bot\n\n "
         "/status - check backup service and database\n"
         "/backup - create a new database dump\n"
         "/list - show available dumps\n"
