@@ -108,6 +108,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.effective_message.reply_text(
         "Backup Manager Bot\n\n"
         "COMMIT MADE IN BRANCH\n"
+        "COMMIT MADE IN MAIN\n"
         "/status - check backup service and database\n"
         "/backup - create a new database dump\n"
         "/list - show available dumps\n"
